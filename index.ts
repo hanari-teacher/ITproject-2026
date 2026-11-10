@@ -22,7 +22,7 @@ app.set('views', path.join(process.cwd(), 'views')); // EJSファイルを保存
 
 // 「/」にアクセスされたときの処理
 app.get('/', (req: Request, res: Response): void => {
-  res.send('20261027 test UP');
+  res.send('20261110 test UP');
 });
 
 
