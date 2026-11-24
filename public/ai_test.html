@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini API 疎通テスト（Tailwind CSS）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen py-10 px-4">
+  <div class="max-w-2xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-slate-900">Gemini API 疎通テスト</h1>
+      <p class="text-sm text-slate-500 mt-1">
+        ブラウザから <code class="px-1.5 py-0.5 bg-slate-100 rounded text-slate-700">generateContent</code> を直接呼び出して疎通を確認します。
+      </p>
+    </div>
+
+    <div class="space-y-5">
+      <div>
+        <label for="apiKey" class="block text-sm font-semibold text-slate-700 mb-1.5">
+          APIキー（AIza...）
+        </label>
+        <input
+          type="password"
+          id="apiKey"
+          placeholder="Google AI Studio の APIキーを入力"
+          class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        >
+        <label class="mt-2 inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+          <input type="checkbox" id="rememberKey" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+          <span>ブラウザの localStorage に保存する（ローカルテスト用）</span>
+        </label>
+      </div>
+
+      <div>
+        <label for="model" class="block text-sm font-semibold text-slate-700 mb-1.5">
+          モデル名
+        </label>
+        <select
+          id="model"
+          class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        >
+          <option value="gemini-3.8-flash">gemini-3.8-flash</option>
+          <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+          <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="prompt" class="block text-sm font-semibold text-slate-700 mb-1.5">
+          プロンプト
+        </label>
+        <textarea
+          id="prompt"
+          rows="3"
+          class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        >疎通テストです。正常に受信できていたら「OK」とだけ返答してください。</textarea>
+      </div>
+
+      <div class="pt-1">
+        <button
+          id="sendBtn"
+          type="button"
+          class="w-full sm:w-auto inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
+        >
+          リクエスト送信
+        </button>
+      </div>
+    </div>
+
+    <div class="mt-8 pt-6 border-t border-slate-200">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-base font-bold text-slate-900">実行結果</h2>
+        <span id="status" class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+          未実行
+        </span>
+      </div>
+      <pre
+        id="result"
+        class="bg-slate-900 text-slate-100 rounded-lg p-4 text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap break-all leading-relaxed"
+      >ここにレスポンスが表示されます</pre>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "gemini_test_api_key";
+    const apiKeyInput = document.getElementById("apiKey");
+    const rememberKeyCheckbox = document.getElementById("rememberKey");
+    const sendBtn = document.getElementById("sendBtn");
+    const statusEl = document.getElementById("status");
+    const resultEl = document.getElementById("result");
+
+    // 保存済みキーの復元
+    const savedKey = localStorage.getItem(STORAGE_KEY);
+    if (savedKey) {
+      apiKeyInput.value = savedKey;
+      rememberKeyCheckbox.checked = true;
+    }
+
+    function setStatus(text, type) {
+      statusEl.textContent = text;
+      const base = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ";
+      if (type === "ok") {
+        statusEl.className = base + "bg-emerald-100 text-emerald-800";
+      } else if (type === "ng") {
+        statusEl.className = base + "bg-red-100 text-red-800";
+      } else if (type === "loading") {
+        statusEl.className = base + "bg-amber-100 text-amber-800";
+      } else {
+        statusEl.className = base + "bg-slate-100 text-slate-600";
+      }
+    }
+
+    sendBtn.addEventListener("click", async () => {
+      const apiKey = apiKeyInput.value.trim();
+      const model = document.getElementById("model").value;
+      const prompt = document.getElementById("prompt").value.trim();
+
+      if (!apiKey) {
+        alert("APIキーを入力してください。");
+        apiKeyInput.focus();
+        return;
+      }
+
+      if (rememberKeyCheckbox.checked) {
+        localStorage.setItem(STORAGE_KEY, apiKey);
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+
+      sendBtn.disabled = true;
+      setStatus("送信中...", "loading");
+      resultEl.textContent = "";
+
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [{ text: prompt }]
+              }
+            ]
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setStatus(`エラー (HTTP ${res.status})`, "ng");
+          resultEl.textContent = JSON.stringify(data, null, 2);
+          return;
+        }
+
+        const replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "(テキストなし)";
+        setStatus(`成功 (HTTP ${res.status})`, "ok");
+        resultEl.textContent = `【応答テキスト】\n${replyText}\n\n【生JSON】\n${JSON.stringify(data, null, 2)}`;
+      } catch (err) {
+        setStatus("通信エラー（ネットワークまたはCORS）", "ng");
+        resultEl.textContent = err.message;
+      } finally {
+        sendBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
